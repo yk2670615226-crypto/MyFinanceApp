@@ -1,0 +1,372 @@
+{# =========================
+   通用卡片外壳
+   ========================= #}
+{% macro card_block(
+    title='',
+    icon_class='',
+    header_right='',
+    title_class='fw-bold mb-0 text-dark',
+    card_classes='border-0 shadow-sm rounded-4 mb-4',
+    body_classes='',
+    show_header=True,
+    wrap_body=True
+) %}
+  <div class="card {{ card_classes }}">
+    {% if show_header %}
+    <div class="card-header bg-white border-0 pt-4 px-4 pb-0 d-flex justify-content-between align-items-center">
+      <h6 class="{{ title_class }}">
+        {% if icon_class %}
+          <i class="bi {{ icon_class }} me-2"></i>
+        {% endif %}
+        {{ title }}
+      </h6>
+      {{ header_right|safe }}
+    </div>
+    {% endif %}
+
+    {% if wrap_body %}
+      <div class="card-body {{ body_classes }}">
+        {{ caller() }}
+      </div>
+    {% else %}
+      {{ caller() }}
+    {% endif %}
+  </div>
+{% endmacro %}
+
+{# =========================
+   通用「返回 + 标题」页头
+   ========================= #}
+{% macro page_header_back(title, back_url, show_placeholder=True) %}
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <a
+      href="{{ back_url }}"
+      class="btn btn-light rounded-circle shadow-sm d-flex align-items-center justify-content-center"
+      style="width: 40px; height: 40px;"
+    >
+      <i class="bi bi-chevron-left"></i>
+    </a>
+    <div class="fw-bold fs-5">{{ title }}</div>
+    {% if show_placeholder %}
+      <div style="width: 40px;"></div>
+    {% endif %}
+  </div>
+{% endmacro %}
+
+{# =========================
+   收支明细：单行记录
+   ========================= #}
+{% macro record_row(r) %}
+  <tr>
+    <td class="ps-4">
+      <input
+        class="form-check-input"
+        type="checkbox"
+        name="selected_ids"
+        value="{{ r.id }}"
+        onchange="updateUI()"
+      >
+    </td>
+    <td>
+      <small class="text-muted fw-bold">
+        {{ r.ts.strftime("%Y-%m-%d %H:%M") }}
+      </small>
+    </td>
+    <td>
+      {% if r.type == 'income' %}
+      <span class="badge bg-success-subtle text-success rounded-pill px-3">
+        收入
+      </span>
+      {% else %}
+      <span class="badge bg-secondary-subtle text-secondary rounded-pill px-3">
+        支出
+      </span>
+      {% endif %}
+    </td>
+    <td class="fw-bold font-monospace {{ 'text-success' if r.type == 'income' else 'text-dark' }}">
+      {{ "+" if r.type == 'income' else "-" }}
+      {{ "%.2f"|format(r.amount) }}
+    </td>
+    <td>
+      <span class="badge bg-white text-dark border shadow-sm fw-normal">
+        {{ r.category }}
+      </span>
+    </td>
+    <td>
+      <small class="text-muted">{{ r.note }}</small>
+    </td>
+    <td class="text-end pe-4">
+      <button
+        type="button"
+        class="btn btn-sm btn-light text-primary me-1"
+        title="编辑"
+        data-id="{{ r.id }}"
+        data-amount="{{ r.amount }}"
+        data-category="{{ r.category }}"
+        data-note="{{ r.note }}"
+        onclick="openEditModal(this)"
+      >
+        <i class="bi bi-pencil-square"></i>
+      </button>
+      <button
+        type="button"
+        class="btn btn-sm btn-light text-danger"
+        title="删除"
+        data-id="{{ r.id }}"
+        onclick="triggerSingleDelete(this.dataset.id)"
+      >
+        <i class="bi bi-trash"></i>
+      </button>
+    </td>
+  </tr>
+{% endmacro %}
+
+{# =========================
+   收支明细：所有弹窗 + 隐藏表单
+   ========================= #}
+  {% macro records_modals(existing_categories) %}
+    <!-- 导出成功提示弹窗 -->
+    <div class="modal fade" id="exportSuccessModal" tabindex="-1">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+          <div class="modal-body p-4 text-center">
+            <div class="mb-3 text-success display-1">
+              <i class="bi bi-check-circle-fill"></i>
+            </div>
+            <h4 class="fw-bold mb-1">报表导出成功！</h4>
+            <p class="text-muted mb-2">文件已保存到您的桌面：</p>
+            <div
+              class="bg-light p-3 rounded-3 mb-4 text-break font-monospace small"
+              id="exportPathDisplay"
+            >
+              ...
+            </div>
+            <div id="exportFormatDisplay" class="mb-4 small text-muted"></div>
+            <button
+              type="button"
+              class="btn btn-primary px-5 rounded-pill"
+              data-bs-dismiss="modal"
+            >
+              好的
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 导出报表配置弹窗 -->
+    <div class="modal fade" id="exportReportModal" tabindex="-1">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+          <div class="modal-header border-0 pb-0">
+            <h5 class="modal-title fw-bold"><i class="bi bi-file-richtext me-2"></i>导出财务报表</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body p-4">
+            <div class="alert alert-info border-0 bg-info-subtle text-muted small">
+              支持 <strong>1-36 个月</strong> 的时间范围。<br>
+              选择 <strong>≥12 个月</strong> 时将自动附加与上一年同期的年度对比。
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-bold small text-muted">开始日期</label>
+              <input type="date" class="form-control" id="reportStartDate">
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-bold small text-muted">结束日期</label>
+              <input type="date" class="form-control" id="reportEndDate">
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-bold small text-muted">导出格式</label>
+              <div class="btn-group w-100" role="group">
+                <input type="radio" class="btn-check" name="reportFormat" id="fmtExcel" value="excel" checked>
+                <label class="btn btn-outline-primary" for="fmtExcel"><i class="bi bi-file-earmark-excel me-1"></i>Excel</label>
+                <input type="radio" class="btn-check" name="reportFormat" id="fmtPdf" value="pdf">
+                <label class="btn btn-outline-primary" for="fmtPdf"><i class="bi bi-filetype-pdf me-1"></i>PDF</label>
+              </div>
+            </div>
+            <button type="button" class="btn btn-primary w-100" onclick="exportReport()">
+              <i class="bi bi-cloud-arrow-down me-1"></i> 开始导出
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  <!-- 导入账单弹窗 -->
+  <div class="modal fade" id="importModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow-lg rounded-4">
+        <div class="modal-header border-0 pb-0">
+          <h5 class="modal-title fw-bold">📁 导入账单</h5>
+          <button
+            type="button"
+            class="btn-close"
+            data-bs-dismiss="modal"
+          ></button>
+        </div>
+        <div class="modal-body p-4">
+          <div class="alert alert-info small border-0 bg-info-subtle mb-4">
+            <strong>支持 Excel (.xlsx) 或 CSV 格式。</strong><br>
+            请确保文件包含以下列名之一：<br>
+            <span class="badge bg-white text-dark border mt-1">时间/日期</span>
+            <span class="badge bg-white text-dark border mt-1">金额</span>
+            <span class="badge bg-white text-dark border mt-1">分类</span>
+            <span class="badge bg-white text-dark border mt-1">
+              类型(收入/支出)
+            </span>
+          </div>
+          <form id="importForm">
+            <div class="mb-4">
+              <label class="form-label fw-bold">选择文件</label>
+              <input
+                class="form-control form-control-lg"
+                type="file"
+                id="importFile"
+                name="file"
+                accept=".csv, .xlsx, .xls"
+              >
+            </div>
+            <button
+              type="button"
+              class="btn btn-primary w-100 rounded-pill py-2 fw-bold"
+              id="btnStartImport"
+              onclick="startImport()"
+            >
+              <i class="bi bi-upload me-1"></i> 开始导入
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 导入结果弹窗 -->
+  <div class="modal fade" id="importResultModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow rounded-4">
+        <div class="modal-body p-4 text-center">
+          <div class="mb-3 display-4" id="importIcon"></div>
+          <h5 class="fw-bold mb-2" id="importTitle"></h5>
+          <p class="text-muted" id="importMsg"></p>
+          <button
+            type="button"
+            class="btn btn-light px-4 rounded-pill"
+            onclick="location.reload()"
+          >
+            刷新列表
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 编辑记录弹窗 -->
+  <div class="modal fade" id="editModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <form method="post" action="{{ url_for('main.records_update') }}">
+          <div class="modal-header">
+            <h5 class="modal-title">编辑</h5>
+            <button
+              type="button"
+              class="btn-close"
+              data-bs-dismiss="modal"
+            ></button>
+          </div>
+          <div class="modal-body">
+            <input type="hidden" name="id" id="edit_id">
+
+            <div class="mb-3">
+              <label class="form-label">金额</label>
+              <input
+                type="number"
+                step="0.01"
+                name="amount"
+                id="edit_amount"
+                class="form-control"
+                required
+              >
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label">类别</label>
+              <input
+                type="text"
+                list="category_list"
+                name="category"
+                id="edit_category"
+                class="form-control"
+                required
+              >
+              <datalist id="category_list">
+                {% for cat in existing_categories %}
+                <option value="{{ cat }}"></option>
+                {% endfor %}
+              </datalist>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label">备注</label>
+              <input
+                type="text"
+                name="note"
+                id="edit_note"
+                class="form-control"
+              >
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button
+              type="button"
+              class="btn btn-secondary"
+              data-bs-dismiss="modal"
+            >
+              取消
+            </button>
+            <button type="submit" class="btn btn-primary">保存</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- 删除确认弹窗 -->
+  <div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title text-danger">确认删除</h5>
+        </div>
+        <div class="modal-body">
+          <p id="deleteModalBody"></p>
+        </div>
+        <div class="modal-footer">
+          <button
+            type="button"
+            class="btn btn-secondary"
+            data-bs-dismiss="modal"
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            class="btn btn-danger"
+            id="confirmDeleteBtn"
+          >
+            删除
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 单条删除隐藏表单 -->
+  <form
+    id="singleDeleteForm"
+    method="post"
+    action="{{ url_for('main.records_delete') }}"
+    style="display: none;"
+  >
+    <input type="hidden" name="selected_ids" id="singleDeleteIdInput">
+  </form>
+{% endmacro %}

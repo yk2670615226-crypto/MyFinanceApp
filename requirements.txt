@@ -1,0 +1,7 @@
+Flask
+Flask-SocketIO
+SQLAlchemy
+pandas
+scikit-learn
+reportlab
+pywebview

@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1"
+    >
+    <title>个人记账系统 Pro</title>
+
+    <!-- 样式依赖：Bootstrap / Icons / AOS -->
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    >
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
+    >
+    <link
+      href="https://unpkg.com/aos@2.3.1/dist/aos.css"
+      rel="stylesheet"
+    >
+
+    <style>
+      :root {
+        --bs-body-bg: #f8f9fc;
+        --primary-color: #4e73df;
+        --secondary-color: #858796;
+        --card-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+      }
+
+      body {
+        background-color: var(--bs-body-bg);
+        font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont,
+          'Helvetica Neue', Arial, sans-serif;
+      }
+
+      /* 导航栏：渐变 + 阴影 */
+      .navbar {
+        background: linear-gradient(90deg, #4e73df 0%, #224abe 100%);
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+      }
+
+      /* 卡片：圆角 + 轻微悬浮 */
+      .card {
+        border: none;
+        border-radius: 0.75rem;
+        box-shadow: var(--card-shadow);
+        transition: transform 0.2s ease-in-out;
+      }
+
+      .card-hover:hover {
+        transform: translateY(-3px);
+      }
+
+      /* 按钮：统一圆角 */
+      .btn {
+        border-radius: 0.5rem;
+      }
+
+      /* 轻量 fade-in-up 动画（备用） */
+      .fade-in-up {
+        animation: fadeInUp 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+      }
+
+      @keyframes fadeInUp {
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <!-- 顶部导航 -->
+    <header class="navbar navbar-expand-lg navbar-dark mb-4 py-3 sticky-top">
+      <div class="container">
+        <a class="navbar-brand fw-bold d-flex align-items-center" href="{{ url_for('main.index') }}">
+          <i class="bi bi-wallet-fill me-2"></i>
+          <span>个人记账系统 Pro</span>
+        </a>
+
+        {% set hide_nav_actions = (hide_nav_actions | default(false)) or request.endpoint in ['main.login', 'main.register'] %}
+        {% if not hide_nav_actions %}
+        <div class="ms-auto d-flex gap-2 align-items-center">
+          <!-- 年度统计 -->
+          <a
+            href="{{ url_for('main.annual_report') }}"
+            class="btn btn-sm btn-light text-primary fw-bold d-flex align-items-center"
+          >
+            <i class="bi bi-file-earmark-bar-graph me-1"></i>
+            <span class="d-none d-sm-inline">年度统计</span>
+          </a>
+
+          <!-- 应用锁：未开启 = unlock，已开启 = lock -->
+          {% if g.user %}
+          <button
+            type="button"
+            class="btn btn-sm btn-outline-light border-0 d-flex align-items-center"
+            data-bs-toggle="modal"
+            data-bs-target="#lockSettingsModal"
+            title="{{ '应用锁已开启' if config.enable_lock else '设置应用锁' }}"
+          >
+            <i class="bi {{ 'bi-lock-fill' if config.enable_lock else 'bi-unlock' }}"></i>
+            <span class="d-none d-md-inline ms-1">
+              {{ '已加锁' if config.enable_lock else '未加锁' }}
+            </span>
+          </button>
+
+          <div class="dropdown">
+            <button class="btn btn-sm btn-light text-primary fw-bold dropdown-toggle" type="button" data-bs-toggle="dropdown">
+              <i class="bi bi-person-circle me-1"></i>{{ g.user.username }}
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+              <li><span class="dropdown-item-text text-muted small">UID: {{ g.user.uid }}</span></li>
+              <li><hr class="dropdown-divider"></li>
+              <li>
+                <button class="dropdown-item" type="button" data-bs-toggle="modal" data-bs-target="#editUsernameModal">
+                  修改用户名
+                </button>
+              </li>
+              <li>
+                <button class="dropdown-item" type="button" data-bs-toggle="modal" data-bs-target="#editPasswordModal">
+                  修改密码
+                </button>
+              </li>
+              <li><hr class="dropdown-divider"></li>
+              <li><a class="dropdown-item" href="{{ url_for('main.logout') }}">退出登录</a></li>
+            </ul>
+          </div>
+          {% else %}
+          <a href="{{ url_for('main.login') }}" class="btn btn-sm btn-outline-light">登录</a>
+          <a href="{{ url_for('main.register') }}" class="btn btn-sm btn-light text-primary fw-bold">注册</a>
+          {% endif %}
+        </div>
+        {% endif %}
+      </div>
+    </header>
+
+    <main class="container mb-5">
+      {% with messages = get_flashed_messages(with_categories=True) %}
+        {% if messages %}
+          <div class="mb-3">
+            {% for category, message in messages %}
+              <div class="alert alert-{{ category }} alert-dismissible fade show shadow-sm" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+              </div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
+      {% block content %}{% endblock %}
+    </main>
+
+    <!-- 应用锁设置弹窗：开启 / 修改密码 / 关闭 -->
+    <div class="modal fade" id="lockSettingsModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+          <div class="modal-body p-4">
+            <div class="text-center mb-3">
+              <i class="bi {{ 'bi-lock-fill text-success' if config.enable_lock else 'bi-unlock text-primary' }} display-4"></i>
+            </div>
+            <h5 class="text-center fw-bold mb-3">
+              {{ '应用锁已开启' if config.enable_lock else '开启应用锁' }}
+            </h5>
+            <p class="text-muted text-center mb-4">
+              {% if config.enable_lock %}
+                再次输入新密码可以修改应用锁密码。若不再需要应用锁，可在下方关闭。
+              {% else %}
+                设置启动密码后，每次打开应用时都会先显示锁屏页面，需要输入密码才能进入。
+              {% endif %}
+            </p>
+
+            <!-- 开启 / 修改密码 -->
+            <form method="post" action="{{ url_for('main.lock_update') }}">
+              <input type="hidden" name="action" value="lock_enable">
+              <div class="mb-3">
+                <input
+                  type="password"
+                  name="password"
+                  class="form-control form-control-lg bg-light border-0 text-center"
+                  placeholder="请输入密码"
+                  required
+                >
+              </div>
+              <button type="submit" class="btn btn-primary w-100 rounded-pill py-2 mb-2">
+                {{ '修改密码' if config.enable_lock else '设置密码并开启' }}
+              </button>
+            </form>
+
+            {% if config.enable_lock %}
+            <!-- 关闭应用锁 -->
+            <form method="post" action="{{ url_for('main.lock_update') }}">
+              <input type="hidden" name="action" value="lock_disable">
+              <button type="submit" class="btn btn-outline-danger w-100 rounded-pill py-2">
+                关闭应用锁
+              </button>
+            </form>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {% if g.user %}
+    <!-- 修改用户名弹窗 -->
+    <div class="modal fade" id="editUsernameModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+          <div class="modal-body p-4">
+            <div class="text-center mb-3">
+              <i class="bi bi-person-lines-fill text-primary display-5"></i>
+            </div>
+            <h5 class="text-center fw-bold mb-3">修改用户名</h5>
+            <p class="text-muted text-center mb-3">更新后会立即生效，用于显示在应用中。</p>
+            <form method="post" action="{{ url_for('main.update_username') }}">
+              <div class="mb-3">
+                <label class="form-label fw-bold">新用户名</label>
+                <input type="text" name="username" class="form-control" value="{{ g.user.username }}" required>
+              </div>
+              <button type="submit" class="btn btn-primary w-100 rounded-pill py-2">保存修改</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 修改密码弹窗 -->
+    <div class="modal fade" id="editPasswordModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+          <div class="modal-body p-4">
+            <div class="text-center mb-3">
+              <i class="bi bi-shield-lock text-success display-5"></i>
+            </div>
+            <h5 class="text-center fw-bold mb-3">修改密码</h5>
+            <p class="text-muted text-center mb-3">请输入当前密码以确认您的身份，并设置新密码。</p>
+            <form method="post" action="{{ url_for('main.update_password') }}">
+              <div class="mb-3">
+                <label class="form-label fw-bold">当前密码</label>
+                <input type="password" name="current_password" class="form-control" placeholder="请输入当前密码" required>
+              </div>
+              <div class="mb-3">
+                <label class="form-label fw-bold">新密码</label>
+                <input type="password" name="new_password" class="form-control" placeholder="设置新密码" required>
+              </div>
+              <button type="submit" class="btn btn-success w-100 rounded-pill py-2">确认修改</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- JS 依赖：Bootstrap / AOS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+    <script>
+      AOS.init({
+        duration: 800,
+        once: true,
+        easing: 'ease-out-cubic',
+      });
+    </script>
+    {% block extra_scripts %}{% endblock %}
+  </body>
+</html>

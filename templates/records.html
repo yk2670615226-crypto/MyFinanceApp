@@ -1,0 +1,490 @@
+{% extends "layout.html" %}
+{% from "macros.html" import record_row, records_modals %}
+
+{% block content %}
+
+  <!-- 顶部工具栏：导入 / 导出 / 返回 -->
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h3 class="mb-0 fw-bold text-secondary">
+      <i class="bi bi-list-ul me-2"></i>收支明细
+    </h3>
+    <div class="d-flex gap-2">
+      <button
+        type="button"
+        class="btn btn-primary text-white shadow-sm"
+        onclick="openImportModal()"
+      >
+        <i class="bi bi-cloud-upload me-1"></i> 导入
+      </button>
+
+      <button
+        type="button"
+        class="btn btn-success text-white shadow-sm"
+        onclick="openExportReport()"
+      >
+        <i class="bi bi-file-richtext me-1"></i> 导出报表
+      </button>
+
+      <a href="{{ url_for('main.index') }}" class="btn btn-secondary shadow-sm">
+        <i class="bi bi-arrow-return-left me-1"></i> 返回
+      </a>
+    </div>
+  </div>
+
+  <!-- 筛选条件卡片 -->
+  <div class="card mb-4 shadow-sm border-0">
+    <div class="card-body p-4">
+      <form
+        method="get"
+        action="{{ url_for('main.records_page') }}"
+        id="filterForm"
+        class="row g-3"
+      >
+        <input type="hidden" name="page" value="1">
+
+        <!-- 类型筛选 -->
+        <div class="col-6 col-md-2">
+          <label class="form-label small text-muted fw-bold">类型</label>
+          {% set cur_type = request.args.get('type', '') %}
+          <select
+            name="type"
+            class="form-select form-select-sm bg-light border-0"
+            onchange="autoSubmit()"
+          >
+            <option value="" {{ 'selected' if cur_type == '' }}>全部</option>
+            <option value="expense" {{ 'selected' if cur_type == 'expense' }}>
+              支出
+            </option>
+            <option value="income" {{ 'selected' if cur_type == 'income' }}>
+              收入
+            </option>
+          </select>
+        </div>
+
+        <!-- 类别筛选 -->
+        <div class="col-6 col-md-3">
+          <label class="form-label small text-muted fw-bold">类别</label>
+          {% set cur_cat = request.args.get('category', '') %}
+          <select
+            name="category"
+            class="form-select form-select-sm bg-light border-0"
+            onchange="autoSubmit()"
+          >
+            <option value="" {{ 'selected' if cur_cat == '' }}>全部</option>
+            {% for cat in existing_categories %}
+            <option value="{{ cat }}" {{ 'selected' if cur_cat == cat }}>
+              {{ cat }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- 日期范围 -->
+        <div class="col-12 col-md-5">
+          <label class="form-label small text-muted fw-bold">日期范围</label>
+          <div class="input-group input-group-sm">
+            <input
+              type="date"
+              name="start_date"
+              id="startDate"
+              class="form-control bg-light border-0"
+              value="{{ request.args.get('start_date', '') }}"
+              onchange="checkDateAndSubmit()"
+            >
+            <span class="input-group-text bg-light border-0 text-muted">
+              至
+            </span>
+            <input
+              type="date"
+              name="end_date"
+              id="endDate"
+              class="form-control bg-light border-0"
+              value="{{ request.args.get('end_date', '') }}"
+              onchange="checkDateAndSubmit()"
+            >
+          </div>
+        </div>
+
+        <!-- 排序方式 -->
+        <div class="col-12 col-md-2">
+          <label class="form-label small text-muted fw-bold">排序</label>
+          {% set cur_sort = request.args.get('sort', 'time_desc') %}
+          <select
+            name="sort"
+            class="form-select form-select-sm bg-light border-0"
+            onchange="autoSubmit()"
+          >
+            <option value="time_desc" {{ 'selected' if cur_sort == 'time_desc' }}>
+              时间 ↓
+            </option>
+            <option value="time_asc" {{ 'selected' if cur_sort == 'time_asc' }}>
+              时间 ↑
+            </option>
+            <option
+              value="amount_desc"
+              {{ 'selected' if cur_sort == 'amount_desc' }}
+            >
+              金额 ↓
+            </option>
+            <option
+              value="amount_asc"
+              {{ 'selected' if cur_sort == 'amount_asc' }}
+            >
+              金额 ↑
+            </option>
+          </select>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 列表 + 批量删除 -->
+  <div class="card shadow-sm border-0 rounded-4">
+    <div class="card-body p-0">
+      <form
+        method="post"
+        action="{{ url_for('main.records_delete') }}"
+        id="deleteForm"
+      >
+        <!-- 顶部操作栏：全选 + 批量删除 + 总数 -->
+        <div
+          class="px-4 py-3 border-bottom d-flex align-items-center bg-light bg-opacity-50"
+        >
+          <div class="form-check me-3">
+            <input
+              class="form-check-input"
+              type="checkbox"
+              id="checkAll"
+              onclick="toggleSelectAll(this)"
+            >
+            <label
+              class="form-check-label small text-muted user-select-none"
+              for="checkAll"
+            >
+              全选本页
+            </label>
+          </div>
+
+          <button
+            type="button"
+            class="btn btn-sm btn-danger px-3 rounded-pill animate__animated animate__fadeIn"
+            onclick="triggerBulkDelete()"
+            id="bulkDeleteBtn"
+            style="display: none;"
+          >
+            <i class="bi bi-trash3-fill me-1"></i> 批量删除
+          </button>
+
+          <span class="ms-auto small text-muted">
+            共 {{ total_count }} 条记录
+          </span>
+        </div>
+
+        <!-- 表格主体 -->
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="bg-light text-muted small text-uppercase">
+              <tr>
+                <th style="width: 40px;" class="ps-4"></th>
+                <th>时间</th>
+                <th>类型</th>
+                <th>金额</th>
+                <th>类别</th>
+                <th>备注</th>
+                <th class="text-end pe-4">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in records %}
+                {{ record_row(r) }}
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        {% if not records %}
+        <div class="text-center py-5 text-muted">
+          <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+          暂无记录
+        </div>
+        {% endif %}
+      </form>
+    </div>
+
+    <!-- 分页 -->
+    {% if total_pages > 1 %}
+    <div class="card-footer bg-white py-3">
+      <nav>
+        <ul class="pagination justify-content-center mb-0">
+          <li class="page-item {{ 'disabled' if current_page == 1 }}">
+            <a
+              class="page-link border-0 text-secondary"
+              href="{{ url_for('main.records_page', page=current_page-1, **query_params) if current_page > 1 else '#' }}"
+            >
+              <i class="bi bi-chevron-left"></i>
+            </a>
+          </li>
+
+          <li class="page-item disabled">
+            <span class="page-link border-0 text-dark fw-bold">
+              第 {{ current_page }} / {{ total_pages }} 页
+            </span>
+          </li>
+
+          <li class="page-item {{ 'disabled' if current_page == total_pages }}">
+            <a
+              class="page-link border-0 text-secondary"
+              href="{{ url_for('main.records_page', page=current_page+1, **query_params) if current_page < total_pages else '#' }}"
+            >
+              <i class="bi bi-chevron-right"></i>
+            </a>
+          </li>
+        </ul>
+      </nav>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- 调用宏渲染本页所有弹窗 + 隐藏表单 -->
+  {{ records_modals(existing_categories) }}
+
+{% endblock %}
+
+  {% block extra_scripts %}
+    <script>
+      // ===== 导出财务报表 =====
+      function openExportReport() {
+        const startFilter = document.getElementById("startDate").value;
+        const endFilter = document.getElementById("endDate").value;
+        const startInput = document.getElementById("reportStartDate");
+        const endInput = document.getElementById("reportEndDate");
+
+        const today = new Date();
+        const defaultEnd = today.toISOString().split("T")[0];
+        const defaultStartDate = new Date(today.getFullYear(), today.getMonth() - 1, 1)
+          .toISOString()
+          .split("T")[0];
+
+        startInput.value = startFilter || defaultStartDate;
+        endInput.value = endFilter || defaultEnd;
+
+        new bootstrap.Modal(document.getElementById("exportReportModal")).show();
+      }
+
+      function monthSpan(start, end) {
+        return (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1;
+      }
+
+      async function exportReport() {
+        const startInput = document.getElementById("reportStartDate");
+        const endInput = document.getElementById("reportEndDate");
+        const fmt = document.querySelector('input[name="reportFormat"]:checked')?.value || "excel";
+
+        if (!startInput.value || !endInput.value) {
+          alert("请先选择开始和结束日期");
+          return;
+        }
+
+        const start = new Date(startInput.value);
+        const end = new Date(endInput.value);
+        if (end < start) {
+          alert("结束日期不能早于开始日期");
+          return;
+        }
+
+        const months = monthSpan(start, end);
+        if (months < 1 || months > 36) {
+          alert("报表时间范围需在 1-36 个月内");
+          return;
+        }
+
+        try {
+          const res = await fetch("{{ url_for('main.api_export_report') }}", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              start_date: startInput.value,
+              end_date: endInput.value,
+              format: fmt,
+            }),
+          });
+          const data = await res.json();
+
+          if (!data.success) {
+            alert(`导出失败：${data.msg}`);
+            return;
+          }
+
+          bootstrap.Modal.getInstance(document.getElementById("exportReportModal"))?.hide();
+          document.getElementById("exportPathDisplay").textContent = data.path;
+          document.getElementById("exportFormatDisplay").textContent =
+            data.format === "pdf"
+              ? "已生成 PDF 报表，包含月度汇总与年度对比（若时间≥12个月）"
+              : "已生成 Excel 报表，包含流水、月度汇总与年度对比";
+          new bootstrap.Modal(document.getElementById("exportSuccessModal")).show();
+        } catch (e) {
+          alert("请求出错: " + e);
+        }
+      }
+
+    // ===== 导入数据 =====
+    function openImportModal() {
+      new bootstrap.Modal(document.getElementById("importModal")).show();
+    }
+
+    async function startImport() {
+      const fileInput = document.getElementById("importFile");
+      if (!fileInput.files.length) {
+        alert("请选择文件");
+        return;
+      }
+
+      const btn = document.getElementById("btnStartImport");
+      const originalText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML =
+        '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> 处理中...';
+
+      const formData = new FormData(document.getElementById("importForm"));
+
+      try {
+        const res = await fetch("{{ url_for('main.api_import_data') }}", {
+          method: "POST",
+          body: formData,
+        });
+        const data = await res.json();
+
+        bootstrap.Modal.getInstance(
+          document.getElementById("importModal")
+        ).hide();
+
+        const resultModalEl = document.getElementById("importResultModal");
+        const resultModal = new bootstrap.Modal(resultModalEl);
+        const iconEl = document.getElementById("importIcon");
+        const titleEl = document.getElementById("importTitle");
+        const msgEl = document.getElementById("importMsg");
+
+        if (data.success) {
+          iconEl.innerHTML =
+            '<i class="bi bi-check-circle-fill text-success"></i>';
+          titleEl.textContent = "导入成功";
+          msgEl.textContent = `成功导入 ${data.count} 条数据！AI 已学习您的分类习惯。`;
+        } else {
+          iconEl.innerHTML =
+            '<i class="bi bi-x-circle-fill text-danger"></i>';
+          titleEl.textContent = "导入失败";
+          msgEl.textContent = data.msg;
+        }
+        resultModal.show();
+      } catch (e) {
+        alert("上传失败: " + e);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+      }
+    }
+
+    // ===== 筛选逻辑 =====
+    function autoSubmit() {
+      document.getElementById("filterForm").submit();
+    }
+
+    function checkDateAndSubmit() {
+      const start = document.getElementById("startDate").value;
+      const end = document.getElementById("endDate").value;
+      if ((start && end) || (!start && !end)) {
+        autoSubmit();
+      }
+    }
+
+    // ===== 编辑弹窗 =====
+    function openEditModal(btn) {
+      document.getElementById("edit_id").value = btn.dataset.id;
+      document.getElementById("edit_amount").value = btn.dataset.amount;
+      document.getElementById("edit_category").value = btn.dataset.category;
+      document.getElementById("edit_note").value = btn.dataset.note || "";
+      new bootstrap.Modal(document.getElementById("editModal")).show();
+    }
+
+    // ===== 删除相关逻辑 =====
+    let deleteMode = null; // 'single' or 'bulk'
+    let targetSingleId = null;
+    let deleteModalInstance = null;
+
+    document.addEventListener("DOMContentLoaded", function () {
+      const modalEl = document.getElementById("deleteModal");
+      if (modalEl) {
+        deleteModalInstance = new bootstrap.Modal(modalEl);
+      }
+
+      const confirmBtn = document.getElementById("confirmDeleteBtn");
+      if (confirmBtn) {
+        confirmBtn.addEventListener("click", function () {
+          if (deleteMode === "single") {
+            document.getElementById("singleDeleteIdInput").value =
+              targetSingleId;
+            document.getElementById("singleDeleteForm").submit();
+          } else {
+            document.getElementById("deleteForm").submit();
+          }
+        });
+      }
+
+      updateUI();
+    });
+
+    function triggerSingleDelete(id) {
+      deleteMode = "single";
+      targetSingleId = id;
+      document.getElementById("deleteModalBody").textContent =
+        "确认删除这条记录吗？";
+      if (deleteModalInstance) {
+        deleteModalInstance.show();
+      }
+    }
+
+    function triggerBulkDelete() {
+      const boxes = document.querySelectorAll(
+        'input[name="selected_ids"]:checked'
+      );
+      if (!boxes.length) return;
+
+      deleteMode = "bulk";
+      document.getElementById("deleteModalBody").textContent =
+        "确认删除选中的 " + boxes.length + " 条记录吗？";
+      if (deleteModalInstance) {
+        deleteModalInstance.show();
+      }
+    }
+
+    function updateUI() {
+      const checkedBoxes = document.querySelectorAll(
+        'input[name="selected_ids"]:checked'
+      );
+      const bulkBtn = document.getElementById("bulkDeleteBtn");
+      if (bulkBtn) {
+        bulkBtn.style.display = checkedBoxes.length > 0 ? "inline-block" : "none";
+      }
+    }
+
+    function toggleSelectAll(checkbox) {
+      const boxes = document.querySelectorAll('input[name="selected_ids"]');
+      boxes.forEach(function (cb) {
+        cb.checked = checkbox.checked;
+      });
+      updateUI();
+    }
+
+    // 暴露到全局给 HTML onclick 用
+      window.toggleSelectAll = toggleSelectAll;
+      window.triggerSingleDelete = triggerSingleDelete;
+      window.triggerBulkDelete = triggerBulkDelete;
+      window.openEditModal = openEditModal;
+      window.openImportModal = openImportModal;
+      window.startImport = startImport;
+      window.openExportReport = openExportReport;
+      window.exportReport = exportReport;
+      window.autoSubmit = autoSubmit;
+      window.checkDateAndSubmit = checkDateAndSubmit;
+    </script>
+  {% endblock %}
