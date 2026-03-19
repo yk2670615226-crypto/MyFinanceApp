@@ -3,7 +3,7 @@
 
 {% block content %}
 
-  <!-- 顶部工具栏：导入 / 导出 / 返回 -->
+  <!-- 明细页顶部操作栏 -->
   <div class="d-flex justify-content-between align-items-center mb-4">
     <h3 class="mb-0 fw-bold text-secondary">
       <i class="bi bi-list-ul me-2"></i>收支明细
@@ -31,7 +31,7 @@
     </div>
   </div>
 
-  <!-- 筛选条件卡片 -->
+  <!-- 筛选区域 -->
   <div class="card mb-4 shadow-sm border-0">
     <div class="card-body p-4">
       <form
@@ -79,7 +79,7 @@
           </select>
         </div>
 
-        <!-- 日期范围 -->
+        <!-- 日期范围筛选 -->
         <div class="col-12 col-md-5">
           <label class="form-label small text-muted fw-bold">日期范围</label>
           <div class="input-group input-group-sm">
@@ -138,7 +138,7 @@
     </div>
   </div>
 
-  <!-- 列表 + 批量删除 -->
+  <!-- 明细列表与批量操作区域 -->
   <div class="card shadow-sm border-0 rounded-4">
     <div class="card-body p-0">
       <form
@@ -146,7 +146,7 @@
         action="{{ url_for('main.records_delete') }}"
         id="deleteForm"
       >
-        <!-- 顶部操作栏：全选 + 批量删除 + 总数 -->
+        <!-- 列表顶部批量操作栏 -->
         <div
           class="px-4 py-3 border-bottom d-flex align-items-center bg-light bg-opacity-50"
         >
@@ -180,7 +180,7 @@
           </span>
         </div>
 
-        <!-- 表格主体 -->
+        <!-- 记录表格主体 -->
         <div class="table-responsive">
           <table class="table table-hover align-middle mb-0">
             <thead class="bg-light text-muted small text-uppercase">
@@ -211,7 +211,7 @@
       </form>
     </div>
 
-    <!-- 分页 -->
+    <!-- 分页导航 -->
     {% if total_pages > 1 %}
     <div class="card-footer bg-white py-3">
       <nav>
@@ -245,7 +245,7 @@
     {% endif %}
   </div>
 
-  <!-- 调用宏渲染本页所有弹窗 + 隐藏表单 -->
+  <!-- 渲染导入、导出、编辑、删除等弹窗 -->
   {{ records_modals(existing_categories) }}
 
 {% endblock %}

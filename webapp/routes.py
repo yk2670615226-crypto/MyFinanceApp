@@ -124,10 +124,13 @@ def _generate_demo_data(
     session_obj, user_id: int, target_records: int = 10000, years: int = 10
 ) -> None:
     """生成指定年份范围的随机收入支出记录。"""
+    # 演示数据覆盖首页录入、统计图表、年度报表与明细筛选等场景，
+    # 因此类别命名尽量贴近日常记账语义，便于用户直观看懂功能效果。
     categories = {
         "餐饮": ["工作餐", "晚饭", "KFC", "火锅", "买菜", "奶茶", "夜宵", "烧烤"],
         "交通": ["地铁", "打车", "加油", "公交", "停车费", "高铁", "机票"],
         "购物": ["衣服", "日用品", "京东", "买鞋", "护肤品", "淘宝", "数码"],
+        "教育": ["学费", "书本", "网课", "培训", "资料费", "考试报名"],
         "娱乐": ["电影", "Steam", "KTV", "会员", "门票", "剧本杀", "旅游"],
         "居住": ["电费", "水费", "宽带", "燃气", "物业", "房租"],
         "医疗": ["买药", "挂号", "体检", "口罩"],
@@ -172,6 +175,8 @@ def _generate_demo_data(
             note = random.choice(categories[cat_key])
 
             base_amt = random.uniform(10, 300)
+            # 购物、教育、人情类支出通常金额跨度更大，
+            # 演示数据也据此放大区间，让统计结果更接近真实生活场景。
             if cat_key in ["购物", "教育", "人情"]:
                 base_amt = random.uniform(50, 1000)
 
@@ -214,6 +219,8 @@ def get_settings(db_session, user_id: int | None):
     if not user_id:
         return AppSettings(monthly_budget=0.0, enable_lock=False, is_demo=False)
 
+    # 当账号尚未生成配置时，视为首次初始化。
+    # 此时自动补充演示数据，保证新用户第一次登录就能直接体验完整功能。
     cfg = db_session.query(AppSettings).filter(AppSettings.user_id == user_id).first()
     if not cfg:
         generate_demo_data(db_session, user_id)
@@ -565,7 +572,19 @@ def index():
 @bp.route("/start_demo")
 def start_demo():
     with get_db_session() as db_session:
-        generate_demo_data(db_session, g.user_id)
+        # 该入口只在账号仍处于“未初始化”状态时补建演示数据，
+        # 避免重复访问时再次插入整套演示账单。
+        cfg = (
+            db_session.query(AppSettings)
+            .filter(AppSettings.user_id == g.user_id)
+            .first()
+        )
+        has_records = (
+            db_session.query(Record.id).filter(Record.user_id == g.user_id).first()
+            is not None
+        )
+        if not cfg and not has_records:
+            generate_demo_data(db_session, g.user_id)
     return redirect(url_for("main.index"))
 
 
@@ -609,7 +628,9 @@ def records_page():
             try:
                 q = q.filter(
                     Record.ts
-                    <= datetime.strptime(end, "%Y-%m-%d").replace(hour=23, minute=59)
+                    <= datetime.strptime(end, "%Y-%m-%d").replace(
+                        hour=23, minute=59, second=59, microsecond=999999
+                    )
                 )
             except ValueError:
                 flash("结束日期格式不正确", "warning")

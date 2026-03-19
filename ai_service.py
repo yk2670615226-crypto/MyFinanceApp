@@ -1,3 +1,5 @@
+"""智能分类服务，负责训练与预测账单类别。"""
+
 import re
 import threading
 from typing import List, Optional
@@ -11,15 +13,10 @@ from models import Record
 
 
 class CategoryPredictor:
-    """
-    智能分类预测器。
-
-    机制：
-    1. 优先使用朴素贝叶斯模型根据历史备注进行预测。
-    2. 如果模型未就绪或预测失败，回退到关键字规则匹配。
-    """
+    """根据备注文本预测支出分类。"""
 
     def __init__(self) -> None:
+        """初始化模型、锁与关键词规则。"""
         self.vectorizer = CountVectorizer(tokenizer=self._tokenize, token_pattern=None)
         self.clf = MultinomialNB()
         self.is_trained: bool = False
@@ -63,6 +60,7 @@ class CategoryPredictor:
         }
 
     def _tokenize(self, text: str) -> List[str]:
+        """将输入文本切成英文词、数字、单字和相邻双字片段。"""
         normalized = str(text).strip()
         if not normalized:
             return []
@@ -72,6 +70,7 @@ class CategoryPredictor:
         return tokens + bigrams
 
     def train(self, db_session: Session, _user_id: Optional[int] = None) -> None:
+        """使用历史支出备注训练朴素贝叶斯分类器。"""
         if self._train_lock.locked():
             return
 
@@ -109,6 +108,7 @@ class CategoryPredictor:
                 self.is_trained = False
 
     def predict(self, note: str) -> str:
+        """根据备注内容返回最可能的分类名称。"""
         if not note:
             return "其他"
 

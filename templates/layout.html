@@ -8,9 +8,20 @@
     >
     <title>个人记账系统 Pro</title>
 
-   <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet">
-   <link href="{{ url_for('static', filename='css/bootstrap-icons.min.css') }}" rel="stylesheet">
-   <link href="{{ url_for('static', filename='css/aos.css') }}" rel="stylesheet">
+    <link
+      href="{{ url_for('static', filename='css/bootstrap.min.css') }}"
+      rel="stylesheet"
+    >
+    <link
+      href="{{ url_for('static', filename='css/bootstrap-icons.min.css') }}"
+      rel="stylesheet"
+    >
+    <link
+      href="{{ url_for('static', filename='css/aos.css') }}"
+      rel="stylesheet"
+    >
+    {# 子模板可在此注入页面专属样式或额外 head 内容。 #}
+    {% block extra_head %}{% endblock %}
 
     <style>
       :root {
@@ -67,8 +78,8 @@
     </style>
   </head>
 
-  <body>
-    <!-- 顶部导航 -->
+  <body class="{% block body_class %}{% endblock %}">
+    <!-- 全站顶部导航栏 -->
     <header class="navbar navbar-expand-lg navbar-dark mb-4 py-3 sticky-top">
       <div class="container">
         <a class="navbar-brand fw-bold d-flex align-items-center" href="{{ url_for('main.index') }}">
@@ -79,7 +90,7 @@
         {% set hide_nav_actions = (hide_nav_actions | default(false)) or request.endpoint in ['main.login', 'main.register'] %}
         {% if not hide_nav_actions %}
         <div class="ms-auto d-flex gap-2 align-items-center">
-          <!-- 年度统计 -->
+          <!-- 年度统计入口 -->
           <a
             href="{{ url_for('main.annual_report') }}"
             class="btn btn-sm btn-light text-primary fw-bold d-flex align-items-center"
@@ -88,7 +99,7 @@
             <span class="d-none d-sm-inline">年度统计</span>
           </a>
 
-          <!-- 应用锁：未开启 = unlock，已开启 = lock -->
+          <!-- 应用锁状态与设置入口 -->
           {% if g.user %}
           <button
             type="button"
@@ -149,7 +160,7 @@
       {% block content %}{% endblock %}
     </main>
 
-    <!-- 应用锁设置弹窗：开启 / 修改密码 / 关闭 -->
+    <!-- 应用锁设置弹窗 -->
     <div class="modal fade" id="lockSettingsModal" tabindex="-1" aria-hidden="true">
       <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content border-0 shadow-lg rounded-4">
@@ -168,7 +179,7 @@
               {% endif %}
             </p>
 
-            <!-- 开启 / 修改密码 -->
+            <!-- 设置或更新应用锁密码 -->
             <form method="post" action="{{ url_for('main.lock_update') }}">
               <input type="hidden" name="action" value="lock_enable">
               <div class="mb-3">
@@ -249,7 +260,7 @@
     </div>
     {% endif %}
 
-    <!-- JS 依赖：Bootstrap / AOS -->
+    <!-- 基础前端脚本依赖 -->
    <script src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
     <script src="{{ url_for('static', filename='js/aos.js') }}"></script>
     <script>
