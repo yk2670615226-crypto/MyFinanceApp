@@ -128,6 +128,7 @@ def _generate_demo_data(
         "餐饮": ["工作餐", "晚饭", "KFC", "火锅", "买菜", "奶茶", "夜宵", "烧烤"],
         "交通": ["地铁", "打车", "加油", "公交", "停车费", "高铁", "机票"],
         "购物": ["衣服", "日用品", "京东", "买鞋", "护肤品", "淘宝", "数码"],
+        "教育": ["学费", "书本", "网课", "培训", "资料费", "考试报名"],
         "娱乐": ["电影", "Steam", "KTV", "会员", "门票", "剧本杀", "旅游"],
         "居住": ["电费", "水费", "宽带", "燃气", "物业", "房租"],
         "医疗": ["买药", "挂号", "体检", "口罩"],
@@ -565,7 +566,13 @@ def index():
 @bp.route("/start_demo")
 def start_demo():
     with get_db_session() as db_session:
-        generate_demo_data(db_session, g.user_id)
+        cfg = db_session.query(AppSettings).filter(AppSettings.user_id == g.user_id).first()
+        has_records = (
+            db_session.query(Record.id).filter(Record.user_id == g.user_id).first()
+            is not None
+        )
+        if not cfg and not has_records:
+            generate_demo_data(db_session, g.user_id)
     return redirect(url_for("main.index"))
 
 
