@@ -372,7 +372,7 @@
         const res = await fetch(`{{ url_for('main.api_summary') }}?date=${dateStr}&t=${Date.now()}`);
         const data = await res.json(); 
         document.getElementById('sum-spent').textContent = "¥" + data.display_spent; 
-        document.getElementById('sum-budget').textContent = "¥" + data.display_budget; 
+        document.getElementById('sum-budget').textContent = data.display_budget === "/" ? "/" : "¥" + data.display_budget; 
         const statusEl = document.getElementById('sum-status');
         statusEl.innerHTML = `<span class="${data.status_class} px-3 py-2 rounded-pill shadow-sm cursor-pointer user-select-none">${data.status_text}</span>`;
         statusEl.style.cursor = data.status_text.includes("未设") ? "pointer" : "default";
