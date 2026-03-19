@@ -609,7 +609,9 @@ def records_page():
             try:
                 q = q.filter(
                     Record.ts
-                    <= datetime.strptime(end, "%Y-%m-%d").replace(hour=23, minute=59)
+                    <= datetime.strptime(end, "%Y-%m-%d").replace(
+                        hour=23, minute=59, second=59, microsecond=999999
+                    )
                 )
             except ValueError:
                 flash("结束日期格式不正确", "warning")
