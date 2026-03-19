@@ -1,3 +1,5 @@
+"""桌面壳入口，用 pywebview 启动本地记账应用。"""
+
 import socket
 import sys
 import threading
@@ -14,14 +16,14 @@ WINDOW_TITLE = "个人记账系统 Pro"
 
 
 def get_free_port() -> int:
-    """获取本机闲置端口"""
+    """获取本机可用端口，供内嵌 Web 服务使用。"""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind((HOST, 0))
         return s.getsockname()[1]
 
 
 def wait_for_server(port: int, timeout: float = 8.0) -> bool:
-    """轮询检查后端是否就绪"""
+    """轮询检查后端服务是否已经可访问。"""
     url = f"http://{HOST}:{port}/"
     start_time = time.time()
 
@@ -36,7 +38,7 @@ def wait_for_server(port: int, timeout: float = 8.0) -> bool:
 
 
 def start_server(port: int):
-    """启动 Flask-SocketIO 服务"""
+    """在后台线程中启动 Flask-SocketIO 服务。"""
     socketio.run(
         app,
         host=HOST,
@@ -48,6 +50,7 @@ def start_server(port: int):
 
 
 def main() -> Optional[int]:
+    """启动本地服务并创建桌面窗口。"""
     port = get_free_port()
     url = f"http://{HOST}:{port}/"
     print(f"系统启动中... {url}")

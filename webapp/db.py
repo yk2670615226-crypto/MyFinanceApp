@@ -1,3 +1,5 @@
+"""数据库会话工具，统一封装线程锁与 Session 生命周期。"""
+
 import threading
 from contextlib import contextmanager
 from typing import Generator

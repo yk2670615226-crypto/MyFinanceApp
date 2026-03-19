@@ -1,6 +1,4 @@
-{# =========================
-   通用卡片外壳
-   ========================= #}
+{# 通用卡片组件宏。 #}
 {% macro card_block(
     title='',
     icon_class='',
@@ -34,9 +32,7 @@
   </div>
 {% endmacro %}
 
-{# =========================
-   通用「返回 + 标题」页头
-   ========================= #}
+{# 通用页头组件宏。 #}
 {% macro page_header_back(title, back_url, show_placeholder=True) %}
   <div class="d-flex justify-content-between align-items-center mb-4">
     <a
@@ -53,9 +49,7 @@
   </div>
 {% endmacro %}
 
-{# =========================
-   收支明细：单行记录
-   ========================= #}
+{# 收支记录单行渲染宏。 #}
 {% macro record_row(r) %}
   <tr>
     <td class="ps-4">
@@ -121,9 +115,7 @@
   </tr>
 {% endmacro %}
 
-{# =========================
-   收支明细：所有弹窗 + 隐藏表单
-   ========================= #}
+{# 收支明细页的弹窗与隐藏表单宏。 #}
   {% macro records_modals(existing_categories) %}
     <!-- 导出成功提示弹窗 -->
     <div class="modal fade" id="exportSuccessModal" tabindex="-1">

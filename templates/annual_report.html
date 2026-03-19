@@ -20,7 +20,7 @@
 
 <div class="container py-3" style="max-width: 1100px;">
 
-    {# 固定在左上方的返回按钮（样式在 layout 的 .page-back-btn） #}
+    {# 页面返回入口。 #}
     <a
         href="{{ url_for('main.index') }}"
         class="btn btn-light rounded-circle shadow-sm page-back-btn"
@@ -29,12 +29,12 @@
         <i class="bi bi-chevron-left"></i>
     </a>
 
-    {# 标题区域 #}
+    {# 页面标题区域。 #}
     <div class="text-center mb-4">
         <div class="fw-bold fs-5">收支统计</div>
     </div>
 
-    {# 顶部汇总信息 #}
+    {# 年度汇总信息区域。 #}
     <div class="mb-4 text-center">
         <h1 class="display-3 fw-bold text-dark big-number mb-2">
             <small class="fs-4 align-top me-1">¥</small>{{ "{:,.2f}".format(total_expense) }}
@@ -72,7 +72,7 @@
         </div>
     </div>
 
-    {# 宽屏卡片布局：左边柱状图，右边饼图 #}
+    {# 年度趋势与分类分布区域。 #}
     <div class="row g-4 mb-4">
         <div class="col-12 col-lg-7">
             {% call card_block(
@@ -126,7 +126,6 @@
         </div>
     </div>
 
-    {# 按你的要求：这里不再放“返回首页”按钮 #}
 
 </div>
 
