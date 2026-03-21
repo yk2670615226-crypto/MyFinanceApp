@@ -11,6 +11,7 @@ import threading
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Tuple
+from urllib.parse import urlparse   # 用于 CSRF 来源解析
 
 import pandas as pd
 from flask import (
@@ -123,9 +124,8 @@ def schedule_model_training() -> None:
 def generate_demo_data(
     session_obj, user_id: int, target_records: int = 10000, years: int = 10
 ) -> None:
-    """封装写锁，生成演示用的随机账单数据。"""
-    with db_write_lock:
-        _generate_demo_data(session_obj, user_id, target_records, years)
+    """生成演示用的随机账单数据（已优化锁粒度）。"""
+    _generate_demo_data(session_obj, user_id, target_records, years)
 
 
 def _generate_demo_data(
@@ -203,21 +203,23 @@ def _generate_demo_data(
             )
         )
 
-    session_obj.add_all(records)
+    # 仅在实际写入数据库的瞬间加锁，释放了长达数秒的数据生成期的锁占用
+    with db_write_lock:
+        session_obj.add_all(records)
 
-    expense_sum = sum(r.amount for r in records if r.type == "expense")
-    months_count = years * 12
-    avg_monthly = expense_sum / months_count if months_count else 5000
-    base_budget = round(avg_monthly * 1.15 / 100) * 100
+        expense_sum = sum(r.amount for r in records if r.type == "expense")
+        months_count = years * 12
+        avg_monthly = expense_sum / months_count if months_count else 5000
+        base_budget = round(avg_monthly * 1.15 / 100) * 100
 
-    cfg = session_obj.query(AppSettings).filter(AppSettings.user_id == user_id).first()
-    if not cfg:
-        cfg = AppSettings(user_id=user_id)
-        session_obj.add(cfg)
-    cfg.monthly_budget = base_budget
-    cfg.enable_lock = False
-    cfg.is_demo = True
-    session_obj.commit()
+        cfg = session_obj.query(AppSettings).filter(AppSettings.user_id == user_id).first()
+        if not cfg:
+            cfg = AppSettings(user_id=user_id)
+            session_obj.add(cfg)
+        cfg.monthly_budget = base_budget
+        cfg.enable_lock = False
+        cfg.is_demo = True
+        session_obj.commit()
 
     schedule_model_training()
 
@@ -361,6 +363,28 @@ def shutdown_session(exception=None):
     if session_factory:
         session_factory.remove()
 
+@bp.before_app_request
+def csrf_protect():
+    """轻量级 CSRF 防护：严格校验所有 POST 请求的 Origin 或 Referer"""
+    if request.method == "POST":
+        origin = request.headers.get("Origin")
+        referer = request.headers.get("Referer")
+        
+        is_valid = False
+        # 校验请求是否来自本地回环地址（本机的 Webview 或浏览器）
+        if origin and (origin.startswith("http://127.0.0.1") or origin.startswith("http://localhost")):
+            is_valid = True
+        elif referer:
+            ref_parsed = urlparse(referer)
+            if ref_parsed.hostname in ("127.0.0.1", "localhost"):
+                is_valid = True
+                
+        if not is_valid:
+            # 针对 API 请求返回 JSON，针对表单请求返回弹窗重定向
+            if request.path.startswith("/api/"):
+                return jsonify({"success": False, "msg": "非法请求来源 (CSRF 拦截)"}), 403
+            flash("非法请求来源，请从应用内部操作", "danger")
+            return redirect(url_for("main.login"))
 
 @bp.route("/login")
 def login():
