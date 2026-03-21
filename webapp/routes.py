@@ -90,8 +90,10 @@ def get_month_range(target_date: datetime) -> Tuple[datetime, datetime]:
     return start, end
 
 
-def train_model_async(app: Flask) -> None:
-    """异步触发智能分类模型训练，避免阻塞请求线程。"""
+# 删除了冗余的 train_model_async 函数，直接在 Timer 线程中执行
+def schedule_model_training() -> None:
+    """通过防抖方式安排模型训练，避免无意义的线程嵌套开销。"""
+    app = current_app._get_current_object()
 
     def _train_task():
         with app.app_context():
@@ -101,16 +103,16 @@ def train_model_async(app: Flask) -> None:
                 except Exception as exc:
                     print(f"后台训练失败: {exc}")
 
-    threading.Thread(target=_train_task, daemon=True).start()
+    global _train_timer
+    with _train_lock:
+        if _train_timer and _train_timer.is_alive():
+            _train_timer.cancel()
+        # Timer 自身就是独立的后台线程，直接传入 _train_task 即可
+        _train_timer = threading.Timer(TRAIN_DEBOUNCE_SECONDS, _train_task)
+        _train_timer.daemon = True
+        _train_timer.start()
 
-
-def schedule_model_training() -> None:
-    """通过防抖方式安排模型训练，减少频繁编辑导致的重复开销。"""
-
-    app = current_app._get_current_object()
-
-    def _schedule():
-        train_model_async(app)
+   
 
     global _train_timer
     with _train_lock:
@@ -419,7 +421,12 @@ def do_login():
 
     session["user_id"] = user.id
     session["username"] = user.username
-    next_url = request.args.get("next") or url_for("main.index")
+    
+    next_url = request.args.get("next")
+    # 终极安全校验：确保 next_url 必须是相对路径（本地路由），防止 Open Redirect 钓鱼攻击
+    if not next_url or urlparse(next_url).netloc != "":
+        next_url = url_for("main.index")
+        
     return redirect(next_url)
 
 
@@ -956,7 +963,8 @@ def api_stats_trend():
                 .group_by("k")
                 .all()
             )
-            data = {k: v for k, v in q}
+            # 强制将提取的日期 k 转换为整型，抵御不同底层数据库驱动返回字符串导致的静默图表断崖
+            data = {int(k): v for k, v in q if k is not None}
             labels = [f"{m}月" for m in range(1, 13)]
             values = [round(data.get(m, 0) or 0, 2) for m in range(1, 13)]
             title = f"{target.year}年 支出趋势"
@@ -976,7 +984,8 @@ def api_stats_trend():
                 .group_by("k")
                 .all()
             )
-            data = {k: v for k, v in q}
+            # 强制将提取的日期 k 转换为整型，抵御不同底层数据库驱动返回字符串导致的静默图表断崖
+            data = {int(k): v for k, v in q if k is not None}
             labels = [f"{d}日" for d in range(1, days + 1)]
             values = [round(data.get(d, 0) or 0, 2) for d in range(1, days + 1)]
             title = f"{target.year}年{target.month}月 支出趋势"
