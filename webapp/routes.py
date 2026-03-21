@@ -52,6 +52,7 @@ from models import AppSettings, Record, User
 from webapp import socketio
 from webapp.config import get_data_path
 from webapp.db import db_write_lock, get_db_session
+from flask_socketio import join_room
 
 bp = Blueprint("main", __name__)
 
@@ -71,6 +72,13 @@ AUTH_FREE_ENDPOINTS = {
 
 _train_timer: threading.Timer | None = None
 _train_lock = threading.Lock()
+
+#用户连接时自动加入以其 user_id 命名的专属房间
+@socketio.on('connect')
+def handle_connect():
+    user_id = session.get("user_id")
+    if user_id:
+        join_room(f"user_{user_id}")
 
 
 def get_month_range(target_date: datetime) -> Tuple[datetime, datetime]:
@@ -603,7 +611,7 @@ def exit_demo():
                 cfg.monthly_budget = 0
                 db_session.commit()
             schedule_model_training()
-            socketio.emit("update_pie")
+            socketio.emit("update_pie", to=f"user_{g.user_id}")
     return redirect(url_for("main.index"))
 
 
@@ -767,6 +775,9 @@ def records_new():
 
     try:
         amount = float(request.form.get("amount", 0))
+        # 校验：防范 inf (无限大) 和 nan (非数字)
+        if math.isinf(amount) or math.isnan(amount):
+            raise ValueError("非法数字")
     except (TypeError, ValueError):
         flash("金额格式不正确", "danger")
         return redirect(url_for("main.index"))
@@ -803,7 +814,7 @@ def records_new():
     if rtype == "expense":
         schedule_model_training()
 
-    socketio.emit("update_pie")
+    socketio.emit("update_pie", to=f"user_{g.user_id}")
     return redirect(url_for("main.index", saved="1"))
 
 
@@ -828,8 +839,9 @@ def records_update():
         with db_write_lock:
             try:
                 amount_val = float(request.form.get("amount", rec.amount))
-                if amount_val <= 0:
-                    raise ValueError
+                # 校验：防范 inf (无限大) 和 nan (非数字)
+                if math.isinf(amount_val) or math.isnan(amount_val) or amount_val <= 0:
+                    raise ValueError("非法数字")
                 rec.amount = amount_val
             except (TypeError, ValueError):
                 flash("金额格式不正确", "danger")
@@ -841,7 +853,7 @@ def records_update():
 
         if rec.type == "expense":
             schedule_model_training()
-        socketio.emit("update_pie")
+        socketio.emit("update_pie", to=f"user_{g.user_id}")
     return redirect(url_for("main.records_page"))
 
 
@@ -860,7 +872,7 @@ def records_delete():
             db_session.commit()
 
     schedule_model_training()
-    socketio.emit("update_pie")
+    socketio.emit("update_pie", to=f"user_{g.user_id}")
     return redirect(url_for("main.records_page"))
 
 
@@ -886,7 +898,7 @@ def api_update_budget():
             cfg.monthly_budget = val
             db_session.commit()
 
-    socketio.emit("update_pie")
+    socketio.emit("update_pie", to=f"user_{g.user_id}")
     return jsonify({"success": True})
 
 
@@ -1092,7 +1104,7 @@ def api_import_data():
                 db_session.commit()
 
             schedule_model_training()
-        socketio.emit("update_pie")
+        socketio.emit("update_pie", to=f"user_{g.user_id}")
         return jsonify({"success": True, "count": len(recs)})
 
     except Exception as exc:

@@ -51,15 +51,23 @@ def start_server(port: int):
 
 def main() -> Optional[int]:
     """启动本地服务并创建桌面窗口。"""
-    port = get_free_port()
-    url = f"http://{HOST}:{port}/"
-    print(f"系统启动中... {url}")
+    port = 0
+    url = ""
+    # 增加最多 3 次的端口重试机制，避免极小概率的端口被抢占问题
+    for _ in range(3):
+        port = get_free_port()
+        url = f"http://{HOST}:{port}/"
+        print(f"系统启动中... 尝试绑定端口 {port}")
 
-    t = threading.Thread(target=start_server, args=(port,), daemon=True)
-    t.start()
+        t = threading.Thread(target=start_server, args=(port,), daemon=True)
+        t.start()
 
-    if not wait_for_server(port):
-        print("错误：后端服务器启动超时。")
+        # 等待服务响应，如果成功则跳出循环
+        if wait_for_server(port, timeout=3.0):
+            break
+    else:
+        # 如果循环正常结束（未触发 break），说明 3 次都失败了
+        print("错误：后端服务器启动超时或端口持续被占用。")
         return 1
 
     webview.create_window(

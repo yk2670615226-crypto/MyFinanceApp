@@ -82,6 +82,8 @@ class CategoryPredictor:
                     Record.note.isnot(None),
                     Record.type == "expense",
                 )
+                .order_by(Record.ts.desc())  # 按时间倒序
+                .limit(5000)
                 .all()
             )
 

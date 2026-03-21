@@ -36,8 +36,12 @@ class Record(Base):
     """收支记录表，保存单条收入与支出流水。"""
 
     __tablename__ = "records"
+    
+    # 将索引绑定到当前表
+    __table_args__ = (Index("idx_records_type_ts", "type", "ts"),)
 
     id = Column(Integer, primary_key=True)
+
     user_id = Column(Integer, index=True, nullable=True, comment="用户 ID")
     ts = Column(
         DateTime, index=True, nullable=False, default=datetime.now, comment="交易时间"
@@ -52,8 +56,6 @@ class Record(Base):
     def __repr__(self) -> str:
         return f"<Record id={self.id} ts={self.ts} amount={self.amount} type={self.type} cat={self.category}>"
 
-
-Index("idx_records_type_ts", Record.type, Record.ts)
 
 
 class User(Base):
