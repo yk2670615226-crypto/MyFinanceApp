@@ -106,7 +106,9 @@ class CategoryPredictor:
                     self.vectorizer = new_vectorizer
                     self.clf = new_clf
                     self.is_trained = True
-            except Exception:
+            except Exception as e:
+                # 打印具体的异常信息，方便后续排查问题
+                print(f"【AI 服务】模型训练发生异常: {e}")
                 self.is_trained = False
 
     def predict(self, note: str) -> str:
@@ -121,7 +123,9 @@ class CategoryPredictor:
                 with self._model_lock:
                     X = self.vectorizer.transform([text])
                     return self.clf.predict(X)[0]
-            except Exception:
+            except Exception as e:
+                # 打印具体的异常信息
+                print(f"【AI 服务】模型预测发生异常: {e}")
                 pass
 
         for key, cat in self.rules.items():
