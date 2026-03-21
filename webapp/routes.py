@@ -371,9 +371,11 @@ def csrf_protect():
         referer = request.headers.get("Referer")
         
         is_valid = False
-        # 校验请求是否来自本地回环地址（本机的 Webview 或浏览器）
-        if origin and (origin.startswith("http://127.0.0.1") or origin.startswith("http://localhost")):
-            is_valid = True
+       # 校验请求是否来自本地回环地址（精确校验 hostname，防止伪造域名绕过）
+        if origin:
+            org_parsed = urlparse(origin)
+            if org_parsed.hostname in ("127.0.0.1", "localhost"):
+                is_valid = True
         elif referer:
             ref_parsed = urlparse(referer)
             if ref_parsed.hostname in ("127.0.0.1", "localhost"):
