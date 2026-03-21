@@ -413,7 +413,7 @@ def do_login():
     
     next_url = request.args.get("next")
     # 终极安全校验：确保 next_url 必须是相对路径（本地路由），防止 Open Redirect 钓鱼攻击
-    if not next_url or urlparse(next_url).netloc != "":
+    if not next_url or urlparse(next_url).netloc != "" or next_url.startswith("//"):
         next_url = url_for("main.index")
         
     return redirect(next_url)
@@ -427,6 +427,11 @@ def do_register():
 
     if not uid or not username or not password:
         flash("请完整填写所有字段", "warning")
+        return redirect(url_for("main.register"))
+
+    # 防御 Hash DoS 攻击：限制密码长度，防止超长文本耗尽系统 CPU 算力
+    if len(password) > 64:
+        flash("密码长度不能超过 64 位", "danger")
         return redirect(url_for("main.register"))
 
     if not re.fullmatch(r"[A-Za-z0-9]+", uid):
@@ -796,7 +801,8 @@ def records_new():
     manual_cat = (request.form.get("category", "") or "").strip()
 
     try:
-        amount = float(request.form.get("amount", 0))
+        # 强制保留两位小数，阻断金融计算中 IEEE 754 浮点数的累积误差
+        amount = round(float(request.form.get("amount", 0)), 2)
         # 校验：防范 inf (无限大) 和 nan (非数字)
         if math.isinf(amount) or math.isnan(amount):
             raise ValueError("非法数字")
@@ -860,7 +866,8 @@ def records_update():
 
         with db_write_lock:
             try:
-                amount_val = float(request.form.get("amount", rec.amount))
+                # 强制保留两位小数
+                amount_val = round(float(request.form.get("amount", rec.amount)), 2)
                 # 校验：防范 inf (无限大) 和 nan (非数字)
                 if math.isinf(amount_val) or math.isnan(amount_val) or amount_val <= 0:
                     raise ValueError("非法数字")
@@ -1103,7 +1110,8 @@ def api_import_data():
         recs = []
         for _, row in df.iterrows():
             try:
-                amt = float(row["amount"])
+                # 强制保留两位小数
+                amt = round(float(row["amount"]), 2)
                 # 补充校验：抛弃 Excel 中的坏账坏数
                 if math.isinf(amt) or math.isnan(amt):
                     continue
