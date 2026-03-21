@@ -52,6 +52,11 @@ def create_app() -> Flask:
 
     def ensure_schema() -> None:
         """创建或升级数据库表结构，保证旧版本数据可用。"""
+        # 终极性能优化：开启 WAL 模式，大幅提升 SQLite 并发读写能力
+        with engine.connect() as conn:
+            conn.execute(text("PRAGMA journal_mode=WAL;"))
+            conn.execute(text("PRAGMA synchronous=NORMAL;"))
+
         inspector = inspect(engine)
         existing_tables = inspector.get_table_names()
 

@@ -910,6 +910,9 @@ def api_predict():
 def api_update_budget():
     try:
         val = float((request.json or {}).get("budget", 0))
+        # 补充校验：防范 inf 和 nan
+        if math.isinf(val) or math.isnan(val):
+            raise ValueError
     except (TypeError, ValueError):
         return jsonify({"success": False, "error": "预算格式不正确"})
 
@@ -1101,6 +1104,9 @@ def api_import_data():
         for _, row in df.iterrows():
             try:
                 amt = float(row["amount"])
+                # 补充校验：抛弃 Excel 中的坏账坏数
+                if math.isinf(amt) or math.isnan(amt):
+                    continue
             except Exception:
                 continue
 
