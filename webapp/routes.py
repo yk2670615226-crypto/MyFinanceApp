@@ -16,7 +16,6 @@ from urllib.parse import urlparse   # 用于 CSRF 来源解析
 import pandas as pd
 from flask import (
     Blueprint,
-    Flask,
     current_app,
     flash,
     g,
@@ -90,10 +89,9 @@ def get_month_range(target_date: datetime) -> Tuple[datetime, datetime]:
     return start, end
 
 
-# 删除了冗余的 train_model_async 函数，直接在 Timer 线程中执行
 def schedule_model_training() -> None:
     """通过防抖方式安排模型训练，避免无意义的线程嵌套开销。"""
-    app = current_app._get_current_object()
+    app = current_app._get_current_object()  # noqa: PyProtectedMember
 
     def _train_task():
         with app.app_context():
@@ -112,15 +110,6 @@ def schedule_model_training() -> None:
         _train_timer.daemon = True
         _train_timer.start()
 
-   
-
-    global _train_timer
-    with _train_lock:
-        if _train_timer and _train_timer.is_alive():
-            _train_timer.cancel()
-        _train_timer = threading.Timer(TRAIN_DEBOUNCE_SECONDS, _schedule)
-        _train_timer.daemon = True
-        _train_timer.start()
 
 
 def generate_demo_data(
